@@ -5,10 +5,8 @@
 3) Создана модель RefreshJwtRequest, у которой будет refreshToken.
 4) Реализован класс JwtProvider.
 5) Для генерации токенов используется flask_jwt_extended от Flask.
-6) У JwtProvider есть метод генерации accessToken по User, в токен сохранена
-информация о UUID.
-7) У JwtProvider есть метод генерации refreshToken по User, в токен сохранена
-информация о UUID.
+6) У JwtProvider есть метод генерации accessToken по User, в токен сохранена информация о UUID.
+7) У JwtProvider есть метод генерации refreshToken по User, в токен сохранена информация о UUID.
 8) У JwtProvider есть метод валидации accessToken.
 9) У JwtProvider есть метод валидации refreshToken.
 10) Обновлен сервис авторизации, который использует UserService, JwtProvider для реализации методов.
