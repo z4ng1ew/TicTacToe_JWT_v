@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Крестики-Нолики</title>
+    <style>
+        :root {
+            --bg: #1e1e2e; --surface: #313244; --border: #45475a;
+            --text: #cdd6f4; --accent: #89b4fa; --success: #a6e3a1; --danger: #f38ba8;
+            --warning: #fab387; --muted: #6c7086;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: monospace; background: var(--bg); color: var(--text);
+            display: flex; flex-direction: column; min-height: 100vh; padding: 16px;
+        }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 16px; background: var(--surface); border-radius: 8px; margin-bottom: 12px;
+        }
+        h1 { font-size: 1.2rem; color: var(--accent); }
+        .auth-section { display: flex; gap: 8px; align-items: center; }
+        .auth-section input {
+            padding: 6px 10px; background: var(--bg); border: 1px solid var(--border);
+            color: var(--text); border-radius: 4px; width: 120px;
+        }
+        .auth-section button {
+            padding: 6px 12px; background: var(--accent); border: none; color: var(--bg);
+            cursor: pointer; border-radius: 4px; font-weight: bold;
+        }
+        .auth-section button:hover { background: #74c7ec; }
+        .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+        .tab-btn {
+            padding: 8px 16px; background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); cursor: pointer; border-radius: 4px 4px 0 0;
+        }
+        .tab-btn.active { background: var(--accent); color: var(--bg); border-bottom: none; }
+        .panel {
+            display: none; background: var(--surface); padding: 16px; border-radius: 0 8px 8px 8px;
+            border: 1px solid var(--border);
+        }
+        .panel.active { display: block; }
+        .grid { display: grid; grid-template-columns: repeat(3, 90px); gap: 8px; margin: 16px auto; width: fit-content; }
+        .cell {
+            width: 90px; height: 90px; background: var(--bg); border: 2px solid var(--border);
+            color: var(--text); font-size: 40px; cursor: pointer; border-radius: 8px;
+        }
+        .cell:hover { background: var(--border); }
+        .cell:disabled { cursor: not-allowed; opacity: 0.5; }
+        .cell.x { color: var(--success); }
+        .cell.o { color: var(--danger); }
+        .status { padding: 8px; background: var(--bg); border-radius: 4px; margin: 8px 0; min-height: 24px; }
+        .status.waiting { color: var(--warning); }
+        .status.turn { color: var(--accent); }
+        .status.win { color: var(--success); font-weight: bold; }
+        .status.lose { color: var(--danger); font-weight: bold; }
+        .status.draw { color: var(--muted); }
+        .btn {
+            padding: 10px 20px; background: var(--accent); border: none; color: var(--bg);
+            cursor: pointer; border-radius: 5px; font-size: 14px; font-weight: bold; margin: 4px;
+        }
+        .btn:hover { background: #74c7ec; }
+        .btn.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+        .btn.secondary:hover { background: var(--border); }
+        .btn.danger { background: var(--danger); color: var(--bg); }
+        .btn.danger:hover { background: #eba0ac; }
+        .form-row { display: flex; gap: 8px; margin: 8px 0; align-items: center; flex-wrap: wrap; }
+        .form-row input, .form-row select {
+            padding: 8px; background: var(--bg); border: 1px solid var(--border);
+            color: var(--text); border-radius: 4px; min-width: 150px;
+        }
+        .games-list { max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+        .game-item {
+            padding: 8px; border-bottom: 1px solid var(--border); display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .game-item:last-child { border-bottom: none; }
+        .logs {
+            background: #111; color: #0f0; padding: 12px; border-radius: 4px;
+            max-height: 300px; overflow-y: auto; font-size: 12px; white-space: pre-wrap;
+        }
+        .log-entry { margin: 2px 0; }
+        .log-entry.req { color: var(--accent); }
+        .log-entry.res { color: var(--success); }
+        .log-entry.err { color: var(--danger); }
+        .user-info { padding: 8px; background: var(--bg); border-radius: 4px; margin: 8px 0; }
+        .hidden { display: none !important; }
+        code { background: var(--bg); padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🎮 Крестики-Нолики</h1>
+        <div class="auth-section" id="authSection">
+            <input type="text" id="loginInput" placeholder="Логин">
+            <input type="password" id="passInput" placeholder="Пароль">
+            <button onclick="doSignup()">Регистрация</button>
+            <button onclick="doLogin()">Вход</button>
+            <button class="secondary" onclick="logout()">Выйти</button>
+        </div>
+        <div id="userInfo" class="hidden">
+            <span id="userName">Пользователь</span>
+            <small id="userId" style="color: var(--muted); margin-left: 8px;"></small>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab(event, 'game')">🎲 Игра</button>
+        <button class="tab-btn" onclick="switchTab(event, 'lobby')">👥 Лобби</button>
+        <button class="tab-btn" onclick="switchTab(event, 'search')">👤 Поиск игрока</button>
+        <button class="tab-btn" onclick="switchTab(event, 'logs')">📋 Логи</button>
+    </div>
+
+    <div id="panel-game" class="panel active">
+        <div class="form-row">
+            <button class="btn" onclick="createGame('pve')">🤖 С компьютером</button>
+            <button class="btn secondary" onclick="createGame('pvp')">👤 Создать PvP</button>
+            <button class="btn danger" onclick="resetMatch()">🔄 Сброс</button>
+        </div>
+        <div id="gameStatus" class="status">Ожидание...</div>
+        <div class="grid" id="board"></div>
+        <div id="gameMeta" style="text-align: center; font-size: 12px; color: var(--muted);"></div>
+        <div id="sid" style="text-align: center; font-size: 10px; color: var(--muted); margin-top: 8px;"></div>
+    </div>
+
+    <div id="panel-lobby" class="panel">
+        <div class="form-row">
+            <button class="btn" onclick="refreshLobby()">🔄 Обновить</button>
+            <button class="btn secondary" onclick="createGame('pvp')">➕ Создать PvP</button>
+        </div>
+        <div id="lobbyList" class="games-list" style="margin-top: 8px;">
+            <div class="game-item"><small>Загрузка...</small></div>
+        </div>
+    </div>
+
+    <div id="panel-search" class="panel">
+        <div class="form-row">
+            <input type="text" id="searchInput" placeholder="UUID пользователя">
+            <button class="btn" onclick="searchUser()">🔍 Найти</button>
+        </div>
+        <div id="searchResult" class="user-info hidden">
+            <strong>Логин:</strong> <span id="foundLogin"></span><br>
+            <strong>UUID:</strong> <span id="foundId"></span>
+        </div>
+    </div>
+
+    <div id="panel-logs" class="panel">
+        <div class="form-row">
+            <button class="btn secondary" onclick="clearLogs()">🗑️ Очистить</button>
+        </div>
+        <div id="logsPanel" class="logs"></div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentGame = null;
+        let field = null;
+        let active = false;
+        let autoRefresh = null;
+
+        function log(msg, type = 'info') {
+            const panel = document.getElementById('logsPanel');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type === 'req' ? 'req' : type === 'err' ? 'err' : 'res'}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            panel.appendChild(entry);
+            panel.scrollTop = panel.scrollHeight;
+        }
+        function clearLogs() { document.getElementById('logsPanel').innerHTML = ''; }
+
+        async function api(endpoint, method = 'GET', body = null, requireAuth = true) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (requireAuth && currentUser?.token) {
+                headers['Authorization'] = `Basic ${currentUser.token}`;
+            }
+            log(`→ ${method} ${endpoint}`, 'req');
+            const resp = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : null });
+            const data = await resp.json().catch(() => null);
+            log(`← ${resp.status} ${endpoint}`, resp.ok ? 'res' : 'err');
+            if (!resp.ok) throw new Error(data?.error || data?.description || `Ошибка ${resp.status}`);
+            return data;
+        }
+
+        function b64(str) { return btoa(unescape(encodeURIComponent(str))); }
+
+        function saveAuth(login, password, userId) {
+            currentUser = { login, token: b64(`${login}:${password}`), userId };
+            localStorage.setItem('ttt_auth', JSON.stringify(currentUser));
+            updateAuthUI();
+        }
+        function loadAuth() {
+            const saved = localStorage.getItem('ttt_auth');
+            if (saved) { currentUser = JSON.parse(saved); updateAuthUI(); }
+        }
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('ttt_auth');
+            updateAuthUI();
+            resetMatch();
+        }
+        function updateAuthUI() {
+            const authSec = document.getElementById('authSection');
+            const userInfo = document.getElementById('userInfo');
+            if (currentUser) {
+                authSec.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                document.getElementById('userName').textContent = currentUser.login;
+                document.getElementById('userId').textContent = currentUser.userId;
+            } else {
+                authSec.classList.remove('hidden');
+                userInfo.classList.add('hidden');
+            }
+        }
+
+        async function doSignup() {
+            const login = document.getElementById('loginInput').value.trim();
+            const password = document.getElementById('passInput').value;
+            if (!login || !password) { alert('Введите логин и пароль'); return; }
+            try {
+                await api('/signup', 'POST', { login, password }, false);
+                alert('✓ Регистрация успешна. Теперь войдите.');
+            } catch (e) { alert(`Ошибка: ${e.message}`); }
+        }
+
+        async function doLogin() {
+            const login = document.getElementById('loginInput').value.trim();
+            const password = document.getElementById('passInput').value;
+            if (!login || !password) { alert('Введите логин и пароль'); return; }
+            const token = b64(`${login}:${password}`);
+            log(`→ POST /login`, 'req');
+            const resp = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Authorization': `Basic ${token}` }
+            });
+            const data = await resp.json().catch(() => null);
+            log(`← ${resp.status} /login`, resp.ok ? 'res' : 'err');
+            if (!resp.ok) { alert(`Ошибка: ${data?.error || resp.status}`); return; }
+            saveAuth(login, password, data.user_id);
+            alert('✓ Вход выполнен');
+        }
+
+        function switchTab(ev, tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            ev.target.classList.add('active');
+            document.getElementById(`panel-${tab}`).classList.add('active');
+            if (tab === 'lobby') refreshLobby();
+        }
+
+        function resetMatch() {
+            currentGame = null;
+            field = Array(3).fill(null).map(() => Array(3).fill(0));
+            active = false;
+            drawBoard();
+            setStatus('Создайте игру...', 'waiting');
+            document.getElementById('sid').textContent = '';
+            document.getElementById('gameMeta').textContent = '';
+            stopAutoRefresh();
+        }
+        function drawBoard() {
+            const container = document.getElementById('board');
+            container.innerHTML = '';
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const btn = document.createElement('button');
+                    btn.className = 'cell' + (field[r][c] === 1 ? ' x' : field[r][c] === 2 ? ' o' : '');
+                    btn.textContent = field[r][c] === 1 ? 'X' : field[r][c] === 2 ? 'O' : '';
+                    btn.disabled = !active || field[r][c] !== 0 || !currentGame;
+                    btn.onclick = () => playerMove(r, c);
+                    container.appendChild(btn);
+                }
+            }
+        }
+        function setStatus(text, cls = '') {
+            const el = document.getElementById('gameStatus');
+            el.textContent = text;
+            el.className = `status ${cls}`;
+        }
+
+        async function createGame(mode) {
+            if (!currentUser) { alert('Сначала войдите'); return; }
+            try {
+                const data = await api('/game', 'POST', { mode });
+                currentGame = { id: data.id, mode: data.mode, state: data.state, mySymbol: 'X' };
+                field = data.board.grid.map(row => [...row]);
+                active = data.state === 'player_x_turn';
+                drawBoard();
+                document.getElementById('sid').textContent = `ID: ${data.id}`;
+                document.getElementById('gameMeta').textContent = `Режим: ${mode.toUpperCase()} | Символ: X`;
+                setStatus(mode === 'pvp' ? 'Ожидание соперника...' : 'Твой ход (X)', mode === 'pvp' ? 'waiting' : 'turn');
+                if (mode === 'pvp') startAutoRefresh(data.id);
+            } catch (e) { alert(`Ошибка: ${e.message}`); }
+        }
+
+        async function playerMove(r, c) {
+            if (!active || !currentGame || field[r][c] !== 0) return;
+            const mySymbol = currentGame.mySymbol === 'X' ? 1 : 2;
+            field[r][c] = mySymbol;
+            drawBoard();
+            setStatus('Отправка хода...', 'waiting');
+            try {
+                const data = await api(`/game/${currentGame.id}`, 'POST', {
+                    id: currentGame.id, board: { grid: field, size: 3 }
+                });
+                field = data.board.grid.map(row => [...row]);
+                currentGame.state = data.state;
+                drawBoard();
+                refreshGameStatus(data.state);
+            } catch (e) {
+                field[r][c] = 0;
+                drawBoard();
+                setStatus(`Ошибка: ${e.message}`, '');
+            }
+        }
+
+        function refreshGameStatus(state) {
+            if (state === 'win_x') { setStatus(currentGame.mySymbol === 'X' ? '🎉 Победа!' : '💻 Поражение', currentGame.mySymbol === 'X' ? 'win' : 'lose'); active = false; stopAutoRefresh(); }
+            else if (state === 'win_o') { setStatus(currentGame.mySymbol === 'O' ? '🎉 Победа!' : '💻 Поражение', currentGame.mySymbol === 'O' ? 'win' : 'lose'); active = false; stopAutoRefresh(); }
+            else if (state === 'draw') { setStatus('🤝 Ничья!', 'draw'); active = false; stopAutoRefresh(); }
+            else if (state === 'player_x_turn') { active = currentGame.mySymbol === 'X'; setStatus(active ? 'Твой ход (X)' : 'Ход соперника (X)', 'turn'); }
+            else if (state === 'player_o_turn') { active = currentGame.mySymbol === 'O'; setStatus(active ? 'Твой ход (O)' : 'Ход соперника (O)', 'turn'); }
+            else if (state === 'waiting') { setStatus('Ожидание соперника...', 'waiting'); active = false; }
+            else { setStatus(state, ''); }
+            drawBoard();
+        }
+
+        async function fetchGameState(gameId) {
+            if (!currentGame || currentGame.id !== gameId) return;
+            try {
+                const data = await api(`/game/${gameId}`, 'GET');
+                field = data.board.grid.map(row => [...row]);
+                currentGame.state = data.state;
+                if (data.player_x_id === currentUser.userId) currentGame.mySymbol = 'X';
+                else if (data.player_o_id === currentUser.userId) currentGame.mySymbol = 'O';
+                refreshGameStatus(data.state);
+            } catch (e) { /* silent */ }
+        }
+
+        function startAutoRefresh(gameId) {
+            stopAutoRefresh();
+            autoRefresh = setInterval(() => fetchGameState(gameId), 2000);
+        }
+        function stopAutoRefresh() {
+            if (autoRefresh) { clearInterval(autoRefresh); autoRefresh = null; }
+        }
+
+        async function refreshLobby() {
+            if (!currentUser) {
+                document.getElementById('lobbyList').innerHTML = '<div class="game-item"><small>🔐 Войдите для доступа</small></div>';
+                return;
+            }
+            try {
+                const data = await api('/games/available', 'GET');
+                const games = data.games || [];
+                const list = document.getElementById('lobbyList');
+                if (games.length === 0) {
+                    list.innerHTML = '<div class="game-item"><small>📭 Нет доступных игр</small></div>';
+                } else {
+                    list.innerHTML = games.map(g => `
+                        <div class="game-item">
+                            <div><strong>ID:</strong> <code>${g.id.slice(0, 8)}...</code>
+                            ${g.player_x_id ? `<br><small>Создатель: ${g.player_x_id.slice(0, 8)}...</small>` : ''}
+                            </div>
+                            <button class="btn secondary" onclick="joinGame('${g.id}')">🎮 Присоединиться</button>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                document.getElementById('lobbyList').innerHTML = `<div class="game-item"><small class="err">❌ ${e.message}</small></div>`;
+            }
+        }
+
+        async function joinGame(gameId) {
+            if (!currentUser) { alert('Сначала войдите'); return; }
+            try {
+                const data = await api(`/game/${gameId}/join`, 'POST', {});
+                currentGame = {
+                    id: data.id,
+                    mode: 'pvp',
+                    state: data.state,
+                    mySymbol: data.player_x_id === currentUser.userId ? 'X' : 'O'
+                };
+                field = data.board.grid.map(row => [...row]);
+                drawBoard();
+                document.getElementById('sid').textContent = `ID: ${data.id}`;
+                document.getElementById('gameMeta').textContent = `PvP | Символ: ${currentGame.mySymbol}`;
+                refreshGameStatus(data.state);
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                document.querySelector('.tab-btn').classList.add('active');
+                document.getElementById('panel-game').classList.add('active');
+                startAutoRefresh(data.id);
+            } catch (e) { alert(`Не удалось присоединиться: ${e.message}`); }
+        }
+
+        async function searchUser() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) { alert('Введите UUID'); return; }
+            try {
+                const data = await api(`/user/${query}`, 'GET');
+                document.getElementById('foundLogin').textContent = data.login;
+                document.getElementById('foundId').textContent = data.user_id;
+                document.getElementById('searchResult').classList.remove('hidden');
+            } catch (e) {
+                document.getElementById('searchResult').classList.add('hidden');
+                alert(`Пользователь не найден: ${e.message}`);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadAuth();
+            resetMatch();
+            setInterval(() => {
+                if (document.getElementById('panel-lobby').classList.contains('active')) {
+                    refreshLobby();
+                }
+            }, 2000);
+        });
+        window.addEventListener('beforeunload', () => { stopAutoRefresh(); });
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+1) sudo apt update                                        (1 раз установил больше не надо)
+2) sudo apt install python3 python3-venv python3-pip -y   (1 раз установил больше не надо)
+3) python3 -m venv .venv                                  (1 раз установил больше не надо)
+4) source .venv/bin/activate                              (1 раз установил больше не надо)
+5) pip install flask                                           (1 раз установил больше не надо)
+
+6) pip install sqlalchemy psycopg2-binary                       (1 раз установил больше не надо)     
+
+7)sudo apt update
+sudo apt install postgresql postgresql-contrib -y              (1 раз установил больше не надо)
+8)sudo systemctl enable --now postgresql                        (1 раз установил больше не надо)
+
+
+9)sudo -u postgres psql -c "CREATE DATABASE tictactoe_db;"       (1 раз установил больше не надо)
+10)sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+11)\q                                                             Выход из консоли 
+
+) python main.py
+
+
+

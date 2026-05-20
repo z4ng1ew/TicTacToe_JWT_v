@@ -1,0 +1,2131 @@
+=== ДЕРЕВО ПРОЕКТА (только .py, .html, .css, .js файлы) ===
+.
+├── datasource
+│   ├── database.py
+│   ├── __init__.py
+│   ├── mapper
+│   │   ├── __init__.py
+│   │   └── mapper.py
+│   ├── model
+│   │   ├── game_ds.py
+│   │   ├── __init__.py
+│   │   └── user_ds.py
+│   ├── repository
+│   │   ├── game_repo.py
+│   │   ├── __init__.py
+│   │   └── user_repo.py
+│   └── service
+│       ├── game_service_impl.py
+│       └── __init__.py
+├── di
+│   ├── container.py
+│   └── __init__.py
+├── domain
+│   ├── __init__.py
+│   ├── model
+│   │   ├── game_board.py
+│   │   ├── game.py
+│   │   ├── game_state.py
+│   │   ├── __init__.py
+│   │   ├── signup_request.py
+│   │   └── user.py
+│   └── service
+│       ├── auth_service.py
+│       ├── impl.py
+│       ├── __init__.py
+│       ├── interface.py
+│       └── user_service.py
+├── main.py
+└── web
+    ├── auth
+    │   ├── authenticator.py
+    │   └── __init__.py
+    ├── __init__.py
+    ├── mapper
+    │   ├── __init__.py
+    │   └── mapper.py
+    ├── model
+    │   ├── game_board_web.py
+    │   ├── game_web.py
+    │   └── __init__.py
+    ├── module
+    │   ├── game_module.py
+    │   └── __init__.py
+    ├── route
+    │   ├── auth_controller.py
+    │   ├── controller.py
+    │   └── __init__.py
+    └── static
+        ├── css
+        │   └── style.css
+        ├── index.html
+        └── js
+            └── app.js
+
+19 directories, 43 files
+
+
+
+=== СОДЕРЖИМОЕ .py, .html, .css И .js ФАЙЛОВ ===
+--------------------------------------------------
+ФАЙЛ: ./datasource/database.py
+--------------------------------------------------
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+def init_db(app):
+    app.config['SQLALCHEMY_DATABASE_URI'] = (
+        'postgresql://myuser:mypassword@localhost:5432/tictactoe'
+    )
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    db.init_app(app)
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/__init__.py
+--------------------------------------------------
+from .repository.game_repo import GameRepository
+from .repository.user_repo import UserRepository
+from .mapper.mapper import GameMapper, UserMapper
+from .service.game_service_impl import GameServiceImplWithRepo
+
+__all__ = ["GameRepository", "UserRepository", "GameMapper", "UserMapper", "GameServiceImplWithRepo"]
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/mapper/__init__.py
+--------------------------------------------------
+from .mapper import GameMapper, UserMapper
+
+__all__ = ["GameMapper", "UserMapper"]
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/mapper/mapper.py
+--------------------------------------------------
+import json
+import uuid
+
+from domain.model.game import Game
+from domain.model.game_board import GameBoard
+from domain.model.game_state import GameState
+from datasource.model.game_ds import GameDS
+from datasource.model.user_ds import UserDS
+from domain.model.user import User
+
+
+class GameMapper:
+
+    @staticmethod
+    def domain_to_ds(game: Game) -> GameDS:
+
+        return GameDS(
+            id            = str(game.id),
+            state         = game.state.value,
+            player_x_id   = str(game.player_x_id) if game.player_x_id else None,
+            player_o_id   = str(game.player_o_id) if game.player_o_id else None,
+            current_turn  = str(game.current_turn) if game.current_turn else None,
+            opponent_type = game.opponent_type,
+            board_json    = json.dumps(game.board.matrix),
+        )
+
+    @staticmethod
+    def ds_to_domain(ds: GameDS) -> Game:
+
+        board = GameBoard(matrix=json.loads(ds.board_json))
+        game  = Game(board=board)
+
+        game.id            = uuid.UUID(ds.id)
+        game.state         = GameState(ds.state)
+        game.player_x_id   = uuid.UUID(ds.player_x_id) if ds.player_x_id else None
+        game.player_o_id   = uuid.UUID(ds.player_o_id) if ds.player_o_id else None
+        game.current_turn  = uuid.UUID(ds.current_turn) if ds.current_turn else None
+        game.opponent_type = ds.opponent_type
+
+        return game
+
+
+class UserMapper:
+
+    @staticmethod
+    def domain_to_ds(user: User) -> UserDS:
+
+        return UserDS(
+            id            = str(user.id),
+            login         = user.login,
+            password_hash = user.password_hash,
+        )
+
+    @staticmethod
+    def ds_to_domain(ds: UserDS) -> User:
+
+        user               = User(login=ds.login, password='')
+        user.id            = uuid.UUID(ds.id)
+        user.password_hash = ds.password_hash
+
+        return user
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/model/game_ds.py
+--------------------------------------------------
+from datetime import datetime
+from datasource.database import db
+
+
+class GameDS(db.Model):
+    __tablename__ = 'games'
+
+    id:            str      = db.Column(db.String(36),  primary_key=True)
+    state:         str      = db.Column(db.String(16),  nullable=False, default='waiting')
+    player_x_id:   str      = db.Column(db.String(36),  nullable=True)
+    player_o_id:   str      = db.Column(db.String(36),  nullable=True)
+    current_turn:  str      = db.Column(db.String(36),  nullable=True)
+    opponent_type: str      = db.Column(db.String(8),   nullable=False, default='computer')
+    board_json:    str      = db.Column(db.Text,        nullable=False, default='[]')
+    created_at:    datetime = db.Column(db.DateTime,    nullable=False, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f'<GameDS id={self.id} state={self.state}>'
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/model/__init__.py
+--------------------------------------------------
+from .game_ds import GameDS
+from .user_ds import UserDS
+
+__all__ = ["GameDS", "UserDS"]
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/model/user_ds.py
+--------------------------------------------------
+from datasource.database import db
+
+
+class UserDS(db.Model): 
+    __tablename__ = 'users' 
+    id: str = db.Column(db.String(36), primary_key=True)
+    login: str = db.Column(db.String(64), nullable=False, unique=True)
+    password_hash: str = db.Column(db.String(256), nullable=False)
+    def __repr__(self) -> str:
+        return f'<UserDS id={self.id} login={self.login}>'
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/repository/game_repo.py
+--------------------------------------------------
+from datetime import datetime, timedelta
+from typing import Optional
+
+from datasource.database import db
+from datasource.model.game_ds import GameDS
+
+
+class GameRepository:
+
+    def save(self, game: GameDS) -> None:
+        db.session.merge(game)
+        db.session.commit()
+
+    def get_by_id(self, game_id: str) -> Optional[GameDS]:
+        return db.session.get(GameDS, game_id)
+
+    def get_all_waiting(self) -> list[GameDS]:
+        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+
+        return GameDS.query.filter(
+            GameDS.state      == 'waiting',
+            GameDS.created_at >= one_hour_ago,
+        ).all()
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/repository/__init__.py
+--------------------------------------------------
+from .game_repo import GameRepository
+from .user_repo import UserRepository
+
+__all__ = ["GameRepository", "UserRepository"]
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/repository/user_repo.py
+--------------------------------------------------
+from typing import Optional
+from datasource.database import db
+from datasource.model.user_ds import UserDS
+
+
+class UserRepository:
+
+    def save(self, user: UserDS) -> None:
+        db.session.add(user)
+        db.session.commit()
+
+    def get_by_id(self, user_id: str) -> Optional[UserDS]:
+        return db.session.get(UserDS, user_id)
+
+    def get_by_login(self, login: str) -> Optional[UserDS]:
+        return UserDS.query.filter_by(login=login).first()
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/service/game_service_impl.py
+--------------------------------------------------
+import uuid
+from typing import Optional
+
+from domain.service.impl import GameServiceImpl, check_winner
+from domain.model.game import Game
+from domain.model.game_board import GameBoard
+from domain.model.game_state import GameState
+from domain.model.user import User
+from datasource.repository.game_repo import GameRepository
+from datasource.repository.user_repo import UserRepository
+from datasource.mapper.mapper import GameMapper, UserMapper
+
+
+class GameServiceImplWithRepo(GameServiceImpl):
+
+    def __init__(
+        self,
+        repository: GameRepository,
+        mapper:     GameMapper,
+        user_repo:  UserRepository,
+    ):
+        super().__init__()
+        self._repo      = repository
+        self._mapper    = mapper
+        self._user_repo = user_repo
+
+    def create_game(
+        self,
+        player_id:     uuid.UUID,
+        opponent_type: str = 'computer',
+    ) -> Game:
+        game               = Game()
+        game.player_x_id   = player_id
+        game.opponent_type = opponent_type
+
+        if opponent_type == 'computer':
+            game.state        = GameState.TURN
+            game.current_turn = player_id
+        else:
+            game.state = GameState.WAITING
+
+        self._repo.save(self._mapper.domain_to_ds(game))
+
+        return game
+
+    def get_available_games(self) -> list[Game]:
+        return [
+            self._mapper.ds_to_domain(ds)
+            for ds in self._repo.get_all_waiting()
+        ]
+
+    def join_game(
+        self,
+        game_id:   str,
+        player_id: uuid.UUID,
+    ) -> Optional[Game]:
+        game_ds = self._repo.get_by_id(game_id)
+
+        if game_ds is None:
+            return None
+        else:
+            game = self._mapper.ds_to_domain(game_ds)
+
+            if game.state != GameState.WAITING:
+                return None
+            elif game.player_x_id == player_id:
+                return None
+            else:
+                game.player_o_id  = player_id
+                game.state        = GameState.TURN
+                game.current_turn = game.player_x_id
+
+                self._repo.save(self._mapper.domain_to_ds(game))
+
+                return game
+
+    def get_game(self, game_id: str) -> Optional[Game]:
+        game_ds = self._repo.get_by_id(game_id)
+
+        if game_ds is None:
+            return None
+        else:
+            return self._mapper.ds_to_domain(game_ds)
+
+    def get_user(self, user_id: str) -> Optional[User]:
+        user_ds = self._user_repo.get_by_id(user_id)
+
+        if user_ds is None:
+            return None
+        else:
+            return UserMapper().ds_to_domain(user_ds)
+
+    def make_move(
+        self,
+        game_id:   str,
+        player_id: uuid.UUID,
+        row:       int,
+        col:       int,
+    ) -> Optional[Game]:
+        game_ds = self._repo.get_by_id(game_id)
+
+        if game_ds is None:
+            return None
+        else:
+            game = self._mapper.ds_to_domain(game_ds)
+
+            if game.state != GameState.TURN:
+                return None
+            elif game.current_turn != player_id:
+                return None
+            elif game.board.matrix[row][col] != 0:
+                return None
+            else:
+                symbol                      = 1 if game.player_x_id == player_id else 2
+                game.board.matrix[row][col] = symbol
+                game                        = self._update_state(game, player_id)
+
+                if game.state == GameState.TURN and game.opponent_type == 'computer':
+                    game = self._computer_move(game)
+
+                self._repo.save(self._mapper.domain_to_ds(game))
+
+                return game
+
+    def _update_state(self, game: Game, last_player_id: uuid.UUID) -> Game:
+        if self.is_game_over(game):
+            winner_symbol = check_winner(game.board.matrix)
+
+            if winner_symbol == 0:
+                game.state = GameState.DRAW
+            else:
+                game.state        = GameState.WIN
+                game.current_turn = (
+                    game.player_x_id if winner_symbol == 1
+                    else game.player_o_id
+                )
+        else:
+            game.state        = GameState.TURN
+            game.current_turn = (
+                game.player_o_id if last_player_id == game.player_x_id
+                else game.player_x_id
+            )
+
+        return game
+
+    def _computer_move(self, game: Game) -> Game:
+        r, c = self.get_next_move(game)
+
+        if r != -1 and game.board.matrix[r][c] == 0:
+            game.board.matrix[r][c] = 2
+
+        game = self._update_state(game, game.player_o_id or uuid.uuid4())
+
+        return game
+
+    def save_game_state(self, game: Game) -> None:
+        self._repo.save(self._mapper.domain_to_ds(game))
+
+    def get_previous_board(self, game_id: str) -> Optional[GameBoard]:
+        game_ds = self._repo.get_by_id(str(game_id))
+
+        if game_ds is None:
+            return None
+        else:
+            return self._mapper.ds_to_domain(game_ds).board
+
+--------------------------------------------------
+ФАЙЛ: ./datasource/service/__init__.py
+--------------------------------------------------
+from .game_service_impl import GameServiceImplWithRepo
+
+__all__ = ["GameServiceImplWithRepo"]
+
+--------------------------------------------------
+ФАЙЛ: ./di/container.py
+--------------------------------------------------
+import os
+from flask import Flask, send_from_directory
+
+from datasource.database import db, init_db
+from datasource.repository.game_repo import GameRepository
+from datasource.repository.user_repo import UserRepository
+from datasource.mapper.mapper import GameMapper, UserMapper
+from datasource.service.game_service_impl import GameServiceImplWithRepo
+from domain.service.user_service import UserService
+from domain.service.auth_service import AuthService
+from web.auth.authenticator import UserAuthenticator
+from web.route.controller import create_game_controller
+from web.route.auth_controller import create_auth_controller
+
+
+class Container:
+
+    def __init__(self):
+        self._app = Flask(__name__)
+
+        init_db(self._app)
+
+        with self._app.app_context():
+            db.create_all()
+
+        self._game_repo   = GameRepository()
+        self._user_repo   = UserRepository()
+        self._game_mapper = GameMapper()
+        self._user_mapper = UserMapper()
+
+        self._user_service = UserService(
+            user_repo = self._user_repo,
+        )
+
+        self._game_service = GameServiceImplWithRepo(
+            repository = self._game_repo,
+            mapper     = self._game_mapper,
+            user_repo  = self._user_repo,
+        )
+
+        self._auth_service = AuthService(
+            user_service = self._user_service,
+        )
+
+        self._authenticator = UserAuthenticator(
+            auth_service = self._auth_service,
+        )
+
+        game_bp, user_bp = create_game_controller(
+            service       = self._game_service,
+            authenticator = self._authenticator,
+        )
+        self._app.register_blueprint(game_bp)
+        self._app.register_blueprint(user_bp)
+
+        auth_bp = create_auth_controller(
+            auth_service = self._auth_service,
+        )
+        self._app.register_blueprint(auth_bp)
+
+        static_dir = os.path.join(
+            os.path.dirname(__file__), '..', 'web', 'static'
+        )
+
+        @self._app.route('/')
+        def index():
+            return send_from_directory(static_dir, 'index.html')
+
+        @self._app.route('/assets/<path:filename>')
+        def serve_static(filename):
+            return send_from_directory(static_dir, filename)
+
+    def get_app(self) -> Flask:
+        return self._app
+
+--------------------------------------------------
+ФАЙЛ: ./di/__init__.py
+--------------------------------------------------
+from .container import Container
+
+__all__ = ["Container"]
+
+--------------------------------------------------
+ФАЙЛ: ./domain/__init__.py
+--------------------------------------------------
+from .model import GameBoard, Game
+from .service import GameServiceInterface, GameServiceImpl
+__all__ = ["GameBoard", "Game", "GameServiceInterface", "GameServiceImpl"]
+
+--------------------------------------------------
+ФАЙЛ: ./domain/model/game_board.py
+--------------------------------------------------
+from typing import List
+
+class GameBoard:
+    def __init__(self, matrix: List[List[int]] | None = None, size: int = 3):
+        if matrix is None:
+            self.matrix = [[0] * size for _ in range(size)]
+        else:
+            self.matrix = [row[:] for row in matrix]
+        self.size = len(self.matrix)
+
+    def copy(self) -> "GameBoard":
+        return GameBoard(self.matrix)
+
+--------------------------------------------------
+ФАЙЛ: ./domain/model/game.py
+--------------------------------------------------
+import uuid
+from domain.model.game_board import GameBoard
+from domain.model.game_state import GameState
+
+class Game:
+    def __init__(self, board: GameBoard | None = None):
+        self.id            = uuid.uuid4()
+        self.board         = board or GameBoard()
+        self.state         = GameState.WAITING  
+        self.player_x_id   = None   
+        self.player_o_id   = None   
+        self.current_turn  = None   
+        self.opponent_type = "computer"  
+
+--------------------------------------------------
+ФАЙЛ: ./domain/model/game_state.py
+--------------------------------------------------
+from enum import Enum
+
+class GameState(Enum):
+    WAITING = "waiting"   
+    TURN    = "turn"     
+    DRAW    = "draw"      
+    WIN     = "win"      
+
+--------------------------------------------------
+ФАЙЛ: ./domain/model/__init__.py
+--------------------------------------------------
+from .game_board import GameBoard
+from .game import Game
+from .game_state import GameState
+from .user import User
+from .signup_request import SignUpRequest
+
+__all__ = ["GameBoard", "Game", "GameState", "User", "SignUpRequest"]
+
+--------------------------------------------------
+ФАЙЛ: ./domain/model/signup_request.py
+--------------------------------------------------
+from dataclasses import dataclass
+
+
+@dataclass
+class SignUpRequest:
+    login:    str
+    password: str
+
+--------------------------------------------------
+ФАЙЛ: ./domain/model/user.py
+--------------------------------------------------
+import uuid
+
+class User:
+    def __init__(self, login: str, password: str):
+        self.id       = uuid.uuid4()
+        self.login    = login
+        self.password = password
+        self.password_hash = ''  
+
+--------------------------------------------------
+ФАЙЛ: ./domain/service/auth_service.py
+--------------------------------------------------
+import base64
+import hashlib
+import uuid
+from typing import Optional
+
+from domain.model.signup_request import SignUpRequest
+from domain.service.user_service import UserService
+from datasource.model.user_ds import UserDS
+
+
+class AuthService:
+
+    def __init__(self, user_service: UserService):
+        self._user_service = user_service
+
+    @staticmethod
+    def _hash_password(password: str) -> str:
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    def register(self, request: SignUpRequest) -> bool:
+        existing = self._user_service.get_by_login(request.login)
+
+        if existing is not None:
+            return False
+        else:
+            user_ds               = UserDS()
+            user_ds.id            = str(uuid.uuid4())
+            user_ds.login         = request.login
+            user_ds.password_hash = self._hash_password(request.password)
+
+            self._user_service.save(user_ds)
+
+            return True
+
+    def login(self, auth_header: str) -> Optional[uuid.UUID]:
+        try:
+            encoded         = auth_header.split(' ')[1]
+            decoded         = base64.b64decode(encoded).decode('utf-8')
+            login, password = decoded.split(':', maxsplit=1)
+        except Exception:
+            return None
+
+        user_ds = self._user_service.get_by_login(login)
+
+        if user_ds is None:
+            return None
+        elif user_ds.password_hash != self._hash_password(password):
+            return None
+        else:
+            return uuid.UUID(user_ds.id)
+
+--------------------------------------------------
+ФАЙЛ: ./domain/service/impl.py
+--------------------------------------------------
+from typing import Tuple
+
+from domain.service.interface import GameServiceInterface
+from domain.model.game import Game
+from domain.model.game_board import GameBoard
+
+
+class GameServiceImpl(GameServiceInterface):
+
+    def get_next_move(self, game: Game) -> Tuple[int, int]:
+        matrix     = [row[:] for row in game.board.matrix]
+        best_score = float('-inf')
+        best_move  = (-1, -1)
+
+        for r in range(game.board.size):
+            for c in range(game.board.size):
+                if matrix[r][c] == 0:
+                    matrix[r][c] = 2
+                    score        = self._minimax(matrix, depth=0, is_maximizing=False)
+                    matrix[r][c] = 0
+
+                    if score > best_score:
+                        best_score = score
+                        best_move  = (r, c)
+
+        return best_move
+
+    def validate_board(self, game: Game, previous_board: GameBoard) -> bool:
+        if game.board.size != previous_board.size:
+            return False
+
+        diff_count = 0
+
+        for r in range(game.board.size):
+            for c in range(game.board.size):
+                if game.board.matrix[r][c] != previous_board.matrix[r][c]:
+                    diff_count += 1
+
+        return diff_count == 1
+
+    def is_game_over(self, game: Game) -> bool:
+        if check_winner(game.board.matrix) != 0:
+            return True
+        elif all(cell != 0 for row in game.board.matrix for cell in row):
+            return True
+        else:
+            return False
+
+    def _minimax(self, matrix: list, depth: int, is_maximizing: bool) -> int:
+        winner = check_winner(matrix)
+
+        if winner == 2:
+            return 10 - depth
+        elif winner == 1:
+            return depth - 10
+        elif all(cell != 0 for row in matrix for cell in row):
+            return 0
+        elif is_maximizing:
+            best = float('-inf')
+
+            for r in range(3):
+                for c in range(3):
+                    if matrix[r][c] == 0:
+                        matrix[r][c] = 2
+                        score        = self._minimax(matrix, depth + 1, False)
+                        matrix[r][c] = 0
+                        best         = max(best, score)
+
+            return best
+        else:
+            best = float('inf')
+
+            for r in range(3):
+                for c in range(3):
+                    if matrix[r][c] == 0:
+                        matrix[r][c] = 1
+                        score        = self._minimax(matrix, depth + 1, True)
+                        matrix[r][c] = 0
+                        best         = min(best, score)
+
+            return best
+
+
+def check_winner(matrix: list) -> int:
+    lines = [
+        [(0,0), (0,1), (0,2)],
+        [(1,0), (1,1), (1,2)],
+        [(2,0), (2,1), (2,2)],
+        [(0,0), (1,0), (2,0)],
+        [(0,1), (1,1), (2,1)],
+        [(0,2), (1,2), (2,2)],
+        [(0,0), (1,1), (2,2)],
+        [(0,2), (1,1), (2,0)],
+    ]
+
+    for line in lines:
+        cells = [matrix[r][c] for r, c in line]
+
+        if cells[0] != 0 and cells[0] == cells[1] == cells[2]:
+            return cells[0]
+
+    return 0
+
+--------------------------------------------------
+ФАЙЛ: ./domain/service/__init__.py
+--------------------------------------------------
+from .interface import GameServiceInterface
+from .impl import GameServiceImpl
+from .auth_service import AuthService
+from .user_service import UserService
+
+__all__ = ["GameServiceInterface", "GameServiceImpl", "AuthService", "UserService"]
+
+--------------------------------------------------
+ФАЙЛ: ./domain/service/interface.py
+--------------------------------------------------
+from abc import ABC, abstractmethod
+from typing import Tuple
+from domain.model.game import Game
+from domain.model.game_board import GameBoard
+
+class GameServiceInterface(ABC):
+    @abstractmethod
+    def get_next_move(self, game: Game) -> Tuple[int, int]:
+        pass
+
+    @abstractmethod
+    def validate_board(self, game: Game, previous_board: GameBoard) -> bool:
+        pass
+
+    @abstractmethod
+    def is_game_over(self, game: Game) -> bool:
+        pass
+
+--------------------------------------------------
+ФАЙЛ: ./domain/service/user_service.py
+--------------------------------------------------
+import uuid
+from typing import Optional
+
+from datasource.repository.user_repo import UserRepository
+from datasource.model.user_ds import UserDS
+
+
+class UserService:
+
+    def __init__(self, user_repo: UserRepository):
+        self._user_repo = user_repo
+
+    def get_by_login(self, login: str) -> Optional[UserDS]:
+        return self._user_repo.get_by_login(login)
+
+    def get_by_id(self, user_id: str) -> Optional[UserDS]:
+        return self._user_repo.get_by_id(user_id)
+
+    def save(self, user_ds: UserDS) -> None:
+        self._user_repo.save(user_ds)
+
+--------------------------------------------------
+ФАЙЛ: ./main.py
+--------------------------------------------------
+from di import Container
+
+if __name__ == "__main__":
+    container = Container()
+    app       = container.get_app()
+
+    print("Сервер запущен: http://127.0.0.1:5000")
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
+--------------------------------------------------
+ФАЙЛ: ./web/auth/authenticator.py
+--------------------------------------------------
+import uuid
+from typing import Optional, Callable
+from functools import wraps
+
+from flask import request, jsonify
+
+from domain.service.auth_service import AuthService
+
+
+class UserAuthenticator:
+
+    def __init__(self, auth_service: AuthService):
+        self._auth_service = auth_service
+
+    def get_current_user_id(self) -> Optional[uuid.UUID]:
+        auth_header: Optional[str] = request.headers.get('Authorization')
+
+        if auth_header is None:
+            return None
+
+        return self._auth_service.login(auth_header)
+
+    def required(self, f: Callable) -> Callable:
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user_id = self.get_current_user_id()
+
+            if user_id is None:
+                response             = jsonify({'error': 'Unauthorized'})
+                response.status_code = 401
+                response.headers['WWW-Authenticate'] = 'Basic realm="Login required"'
+                return response
+            else:
+                return f(*args, user_id=user_id, **kwargs)
+
+        return decorated
+
+--------------------------------------------------
+ФАЙЛ: ./web/auth/__init__.py
+--------------------------------------------------
+from .authenticator import UserAuthenticator
+
+__all__ = ["UserAuthenticator"]
+
+--------------------------------------------------
+ФАЙЛ: ./web/__init__.py
+--------------------------------------------------
+from .model import GameBoardWeb, GameWeb
+from .mapper import GameWebMapper
+from .route import create_game_controller
+__all__ = ["GameBoardWeb", "GameWeb", "GameWebMapper", "create_game_controller"]
+
+--------------------------------------------------
+ФАЙЛ: ./web/mapper/__init__.py
+--------------------------------------------------
+from .mapper import GameWebMapper
+__all__ = ["GameWebMapper"]
+
+--------------------------------------------------
+ФАЙЛ: ./web/mapper/mapper.py
+--------------------------------------------------
+from domain.model.game import Game
+from domain.model.game_board import GameBoard
+from web.model.game_web import GameWeb
+from web.model.game_board_web import GameBoardWeb
+
+
+class GameWebMapper:
+
+    @staticmethod
+    def domain_to_web(game: Game) -> GameWeb:
+
+        board_web = GameBoardWeb(
+            matrix = game.board.matrix.copy(),
+            size   = game.board.size,
+        )
+
+        return GameWeb(
+            id           = str(game.id),
+            board        = board_web,
+            state        = game.state.value,
+            opponent_type = game.opponent_type,
+            player_x_id  = str(game.player_x_id) if game.player_x_id else None,
+            player_o_id  = str(game.player_o_id) if game.player_o_id else None,
+            current_turn = str(game.current_turn) if game.current_turn else None,
+        )
+
+--------------------------------------------------
+ФАЙЛ: ./web/model/game_board_web.py
+--------------------------------------------------
+from dataclasses import dataclass
+
+@dataclass
+class GameBoardWeb:
+    matrix: list[list[int]]
+    size: int = 3
+
+--------------------------------------------------
+ФАЙЛ: ./web/model/game_web.py
+--------------------------------------------------
+from dataclasses import dataclass
+from typing import Optional
+from web.model.game_board_web import GameBoardWeb
+
+
+@dataclass
+class GameWeb:
+    id:            str
+    board:         GameBoardWeb
+    state:         str
+    opponent_type: str
+    player_x_id:   Optional[str]
+    player_o_id:   Optional[str]
+    current_turn:  Optional[str]
+
+    def to_dict(self) -> dict:
+        return {
+            'id':            self.id,
+            'state':         self.state,
+            'opponent_type': self.opponent_type,
+            'player_x_id':   self.player_x_id,
+            'player_o_id':   self.player_o_id,
+            'current_turn':  self.current_turn,
+            'board': {
+                'matrix': self.board.matrix,
+                'size':   self.board.size,
+            },
+        }
+
+--------------------------------------------------
+ФАЙЛ: ./web/model/__init__.py
+--------------------------------------------------
+from .game_board_web import GameBoardWeb
+from .game_web import GameWeb
+
+__all__ = ["GameBoardWeb", "GameWeb"]
+
+--------------------------------------------------
+ФАЙЛ: ./web/module/game_module.py
+--------------------------------------------------
+from flask import Blueprint
+game_blueprint = Blueprint('game', __name__)
+
+--------------------------------------------------
+ФАЙЛ: ./web/module/__init__.py
+--------------------------------------------------
+from .game_module import game_blueprint
+__all__ = ["game_blueprint"]
+
+--------------------------------------------------
+ФАЙЛ: ./web/route/auth_controller.py
+--------------------------------------------------
+from flask import Blueprint, request, jsonify
+
+from domain.service.auth_service import AuthService
+from domain.model.signup_request import SignUpRequest
+
+
+def create_auth_controller(auth_service: AuthService) -> Blueprint:
+
+    bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+    @bp.route('/register', methods=['POST'])
+    def register():
+        data = request.get_json()
+
+        if not data or 'login' not in data or 'password' not in data:
+            return jsonify({'error': 'login and password required'}), 400
+
+        signup = SignUpRequest(
+            login    = data['login'],
+            password = data['password'],
+        )
+
+        success = auth_service.register(signup)
+
+        if not success:
+            return jsonify({'error': 'login already taken'}), 409
+
+        return jsonify({'message': 'registered successfully'}), 201
+
+    @bp.route('/login', methods=['POST'])
+    def login():
+        auth_header = request.headers.get('Authorization')
+
+        if not auth_header:
+            return jsonify({'error': 'Authorization header required'}), 401
+
+        user_id = auth_service.login(auth_header)
+
+        if user_id is None:
+            return jsonify({'error': 'invalid login or password'}), 401
+
+        return jsonify({'user_id': str(user_id)}), 200
+
+    return bp
+
+--------------------------------------------------
+ФАЙЛ: ./web/route/controller.py
+--------------------------------------------------
+import os
+import uuid
+from flask import Blueprint, request, jsonify, send_from_directory
+
+from domain.service.interface import GameServiceInterface
+from web.auth.authenticator import UserAuthenticator
+from web.mapper.mapper import GameWebMapper
+
+
+def create_game_controller(
+    service:       GameServiceInterface,
+    authenticator: UserAuthenticator,
+) -> tuple:
+
+    game_bp = Blueprint('game', __name__, url_prefix='/games')
+    user_bp = Blueprint('user', __name__, url_prefix='/users')
+
+    static_dir = os.path.join(os.path.dirname(__file__), '..', 'static')
+
+    @game_bp.route('/', defaults={'path': ''})
+    @game_bp.route('/<path:path>')
+    def serve_frontend(path):
+        if path == '' or path == '/':
+            return send_from_directory(static_dir, 'index.html')
+        else:
+            return send_from_directory(static_dir, path)
+
+    @game_bp.route('', methods=['POST'])
+    @authenticator.required
+    def create_game(user_id: uuid.UUID):
+        data          = request.get_json() or {}
+        opponent_type = data.get('opponent_type', 'computer')
+
+        if opponent_type not in ('computer', 'user'):
+            return jsonify({'error': 'opponent_type must be computer or user'}), 400
+        else:
+            game = service.create_game(
+                player_id     = user_id,
+                opponent_type = opponent_type,
+            )
+            return jsonify(GameWebMapper.domain_to_web(game).to_dict()), 201
+
+    @game_bp.route('', methods=['GET'])
+    @authenticator.required
+    def get_games(user_id: uuid.UUID):
+        games = service.get_available_games()
+        return jsonify([
+            GameWebMapper.domain_to_web(g).to_dict() for g in games
+        ]), 200
+
+    @game_bp.route('/<string:game_id>/join', methods=['POST'])
+    @authenticator.required
+    def join_game(game_id: str, user_id: uuid.UUID):
+        game = service.join_game(
+            game_id   = game_id,
+            player_id = user_id,
+        )
+
+        if game is None:
+            return jsonify({'error': 'game not found or already started'}), 404
+        else:
+            return jsonify(GameWebMapper.domain_to_web(game).to_dict()), 200
+
+    @game_bp.route('/<string:game_id>', methods=['GET'])
+    @authenticator.required
+    def get_game(game_id: str, user_id: uuid.UUID):
+        game = service.get_game(game_id)
+
+        if game is None:
+            return jsonify({'error': 'game not found'}), 404
+        else:
+            return jsonify(GameWebMapper.domain_to_web(game).to_dict()), 200
+
+    @game_bp.route('/<string:game_id>', methods=['PATCH'])
+    @authenticator.required
+    def make_move(game_id: str, user_id: uuid.UUID):
+        data = request.get_json()
+
+        if not data or 'row' not in data or 'col' not in data:
+            return jsonify({'error': 'row and col required'}), 400
+        else:
+            game = service.make_move(
+                game_id   = game_id,
+                player_id = user_id,
+                row       = data['row'],
+                col       = data['col'],
+            )
+
+            if game is None:
+                return jsonify({'error': 'game not found or move not allowed'}), 400
+            else:
+                return jsonify(GameWebMapper.domain_to_web(game).to_dict()), 200
+
+    @user_bp.route('/<string:user_uuid>', methods=['GET'])
+    @authenticator.required
+    def get_user(user_uuid: str, user_id: uuid.UUID):
+        user = service.get_user(user_uuid)
+
+        if user is None:
+            return jsonify({'error': 'user not found'}), 404
+        else:
+            return jsonify({
+                'id':    str(user.id),
+                'login': user.login,
+            }), 200
+
+    return game_bp, user_bp
+
+--------------------------------------------------
+ФАЙЛ: ./web/route/__init__.py
+--------------------------------------------------
+from .controller import create_game_controller
+from .auth_controller import create_auth_controller
+
+__all__ = ["create_game_controller", "create_auth_controller"]
+
+--------------------------------------------------
+ФАЙЛ: ./web/static/css/style.css
+--------------------------------------------------
+:root {
+  --bg:      #0a0a0f;
+  --panel:   #0f0f1a;
+  --border:  #1e1e3a;
+  --accent:  #00ff88;
+  --accent2: #ff3366;
+  --accent3: #00aaff;
+  --text:    #c8d0e0;
+  --dim:     #4a5060;
+}
+
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 100vh;
+}
+
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+
+.hidden { display: none !important; }
+
+.app {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.left-col  { display: flex; flex-direction: column; gap: 20px; }
+.right-col { display: flex; flex-direction: column; gap: 20px; }
+
+header {
+  text-align: center;
+  padding: 40px 0 30px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 30px;
+}
+
+header h1 {
+  font-family: 'Orbitron', monospace;
+  font-size: clamp(1.5rem, 4vw, 2.8rem);
+  font-weight: 900;
+  color: var(--accent);
+  text-shadow: 0 0 30px rgba(0,255,136,0.4);
+  animation: flicker 4s infinite;
+}
+
+header p {
+  color: var(--dim);
+  margin-top: 8px;
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+}
+
+@keyframes flicker {
+  0%,100% { opacity: 1; }
+  92%     { opacity: 1; }
+  93%     { opacity: 0.8; }
+  94%     { opacity: 1; }
+  96%     { opacity: 0.9; }
+  97%     { opacity: 1; }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.panel-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,255,136,0.05);
+}
+
+.panel-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 10px 16px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--dim);
+  cursor: pointer;
+  border: none;
+  background: none;
+  letter-spacing: 0.1em;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover  { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.tab-content         { display: none; padding: 16px; }
+.tab-content.active  { display: flex; flex-direction: column; gap: 10px; }
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+
+label {
+  font-size: 0.7rem;
+  color: var(--dim);
+  letter-spacing: 0.2em;
+}
+
+input, select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: 2px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0,255,136,0.2);
+}
+
+select option { background: var(--bg); }
+
+.btn {
+  padding: 9px 18px;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.btn-primary { background: var(--accent);  color: var(--bg); }
+.btn-primary:hover { background: #00ffaa; box-shadow: 0 0 20px rgba(0,255,136,.4); }
+
+.btn-danger  { background: var(--accent2); color: #fff; }
+.btn-danger:hover { box-shadow: 0 0 20px rgba(255,51,102,.4); }
+
+.btn-info    { background: var(--accent3); color: var(--bg); }
+.btn-info:hover { box-shadow: 0 0 20px rgba(0,170,255,.4); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--dim);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--dim); }
+
+.btn-sm { font-size: 0.6rem; padding: 5px 12px; width: auto; }
+
+
+.auth-status {
+  padding: 10px 12px;
+  border-radius: 2px;
+  font-size: 0.75rem;
+  border: 1px solid;
+}
+
+.auth-status.logged-in  { background: rgba(0,255,136,.08); border-color: rgba(0,255,136,.3); color: var(--accent); }
+.auth-status.logged-out { background: rgba(255,51,102,.08); border-color: rgba(255,51,102,.3); color: var(--accent2); }
+
+
+.uuid-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  color: var(--accent3);
+  word-break: break-all;
+}
+
+.uuid-box span { color: var(--dim); font-size: 0.65rem; }
+
+.board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 240px;
+}
+
+.cell {
+  width: 74px;
+  height: 74px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-family: 'Orbitron', monospace;
+  font-size: 1.8rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.cell.clickable { cursor: pointer; }
+.cell.clickable:hover {
+  border-color: var(--accent);
+  background: rgba(0,255,136,.05);
+  box-shadow: inset 0 0 10px rgba(0,255,136,.1);
+}
+
+.cell.blocked { cursor: not-allowed; opacity: 0.6; }
+.cell.x { color: var(--accent);  text-shadow: 0 0 10px rgba(0,255,136,.5); }
+.cell.o { color: var(--accent2); text-shadow: 0 0 10px rgba(255,51,102,.5); }
+
+.game-status {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  padding: 10px 20px;
+  border-radius: 2px;
+  text-align: center;
+  min-width: 240px;
+}
+
+.gs-idle    { background: transparent;           color: var(--dim);    border: 1px solid var(--border); }
+.gs-waiting { background: rgba(255,170,0,.1);    color: #ffaa00;       border: 1px solid rgba(255,170,0,.3); }
+.gs-turn    { background: rgba(0,255,136,.08);   color: var(--accent); border: 1px solid rgba(0,255,136,.3); }
+.gs-enemy   { background: rgba(0,170,255,.08);   color: var(--accent3);border: 1px solid rgba(0,170,255,.3); }
+.gs-win     { background: rgba(0,255,136,.15);   color: #00ff88;       border: 1px solid #00ff88; }
+.gs-draw    { background: rgba(255,170,0,.15);   color: #ffaa00;       border: 1px solid #ffaa00; }
+.gs-lose    { background: rgba(255,51,102,.1);   color: var(--accent2);border: 1px solid rgba(255,51,102,.3); }
+
+
+.my-symbol-box {
+  padding: 8px 12px;
+  border-radius: 2px;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+}
+
+.my-symbol-box.x { background: rgba(0,255,136,.1);  color: var(--accent);  border: 1px solid rgba(0,255,136,.3); }
+.my-symbol-box.o { background: rgba(255,51,102,.1); color: var(--accent2); border: 1px solid rgba(255,51,102,.3); }
+
+
+.poll-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  color: var(--dim);
+}
+
+
+.poll-indicator:not(.hidden) { display: flex; }
+
+.poll-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: background 0.3s;
+}
+
+.poll-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+
+.move-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+
+.games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.empty-msg {
+  color: var(--dim);
+  font-size: 0.75rem;
+}
+
+.game-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  transition: border-color 0.2s;
+}
+
+.game-item:hover { border-color: var(--accent3); }
+
+.game-id {
+  color: var(--dim);
+  font-size: 0.65rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.badge-waiting { background: rgba(255,170,0,.2); color: #ffaa00; }
+.badge-user    { background: rgba(0,170,255,.2); color: var(--accent3); margin-left: 4px; }
+
+
+.log {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 12px;
+  height: 200px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.log::-webkit-scrollbar       { width: 4px; }
+.log::-webkit-scrollbar-thumb { background: var(--border); }
+
+.log-entry.ok   { color: var(--accent); }
+.log-entry.err  { color: var(--accent2); }
+.log-entry.info { color: var(--accent3); }
+.log-entry.dim  { color: var(--dim); }
+
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(30,30,58,.5);
+  margin-top: 4px;
+}
+
+.info-row .key { color: var(--dim); }
+
+--------------------------------------------------
+ФАЙЛ: ./web/static/index.html
+--------------------------------------------------
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Крестики-Нолики API</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1>✕ КРЕСТИКИ-НОЛИКИ ○</h1>
+    <p>// API INTERFACE v2.0 — SCHOOL 21</p>
+  </header>
+
+  <div class="layout">
+
+
+    <div class="left-col">
+
+
+      <div class="panel">
+        <div class="panel-title">// АВТОРИЗАЦИЯ</div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab(this,'login-tab')">ВХОД</button>
+          <button class="tab" onclick="switchTab(this,'register-tab')">РЕГИСТРАЦИЯ</button>
+        </div>
+
+        <div id="login-tab" class="tab-content active">
+          <div id="auth-status" class="auth-status logged-out">○ НЕ АВТОРИЗОВАН</div>
+          <div class="field">
+            <label>ЛОГИН</label>
+            <input id="login-input" type="text" placeholder="vasya" value="vasya">
+          </div>
+          <div class="field">
+            <label>ПАРОЛЬ</label>
+            <input id="password-input" type="password" placeholder="12345" value="12345">
+          </div>
+          <button class="btn btn-primary" onclick="doLogin()">→ ВОЙТИ</button>
+          <button class="btn btn-ghost" onclick="doLogout()">✕ ВЫЙТИ</button>
+          <div id="user-uuid-box" class="uuid-box hidden">
+            <span>USER UUID:</span><br>
+            <span id="user-uuid-val"></span>
+          </div>
+        </div>
+
+        <div id="register-tab" class="tab-content">
+          <div class="field">
+            <label>ЛОГИН</label>
+            <input id="reg-login" type="text" placeholder="petya">
+          </div>
+          <div class="field">
+            <label>ПАРОЛЬ</label>
+            <input id="reg-password" type="password" placeholder="54321">
+          </div>
+          <button class="btn btn-info" onclick="doRegister()">+ ЗАРЕГИСТРИРОВАТЬСЯ</button>
+        </div>
+      </div>
+
+
+      <div class="panel">
+        <div class="panel-title">// НОВАЯ ИГРА</div>
+        <div class="panel-body">
+          <div class="field">
+            <label>СОПЕРНИК</label>
+            <select id="opponent-type">
+              <option value="computer">КОМПЬЮТЕР</option>
+              <option value="user">ИГРОК</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="createGame()">→ СОЗДАТЬ ИГРУ</button>
+        </div>
+      </div>
+
+
+      <div class="panel">
+        <div class="panel-title">// ДОСТУПНЫЕ ИГРЫ</div>
+        <div class="panel-body">
+          <button class="btn btn-ghost" onclick="loadGames()">↺ ОБНОВИТЬ</button>
+          <div id="games-list" class="games-list">
+            <div class="empty-msg">Нажми ОБНОВИТЬ</div>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="panel">
+        <div class="panel-title">// ПОИСК ПОЛЬЗОВАТЕЛЯ</div>
+        <div class="panel-body">
+          <div class="field">
+            <label>UUID ПОЛЬЗОВАТЕЛЯ</label>
+            <input id="search-uuid" type="text" placeholder="a785e6e4-...">
+          </div>
+          <button class="btn btn-info" onclick="getUser()">→ НАЙТИ</button>
+          <div id="user-info" class="hidden">
+            <div class="info-row"><span class="key">ID</span><span id="ui-id"></span></div>
+            <div class="info-row"><span class="key">LOGIN</span><span id="ui-login"></span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="right-col">
+
+
+      <div class="panel">
+        <div class="panel-title">// ИГРОВОЕ ПОЛЕ</div>
+        <div class="panel-body">
+
+          <div class="board-container">
+            <div id="game-status" class="game-status gs-idle">ИГРА НЕ НАЧАТА</div>
+            <div id="my-symbol" class="my-symbol-box hidden"></div>
+            <div class="board" id="board"></div>
+            <div id="game-id-box" class="uuid-box hidden">
+              <span>GAME UUID:</span><br>
+              <span id="game-uuid-val"></span>
+            </div>
+            <div class="poll-indicator hidden" id="poll-indicator">
+              <div class="poll-dot" id="poll-dot"></div>
+              <span id="poll-label">АВТООБНОВЛЕНИЕ КАЖДЫЕ 2 СЕК</span>
+            </div>
+          </div>
+
+          <hr class="divider">
+
+
+          <div class="move-grid">
+            <div class="field">
+              <label>СТРОКА (0-2)</label>
+              <input id="move-row" type="number" min="0" max="2" value="0">
+            </div>
+            <div class="field">
+              <label>СТОЛБЕЦ (0-2)</label>
+              <input id="move-col" type="number" min="0" max="2" value="0">
+            </div>
+            <button class="btn btn-primary" onclick="makeMove()">ХОД</button>
+          </div>
+
+
+          <div class="control-grid">
+            <button class="btn btn-ghost" onclick="refreshGame()">↺ ОБНОВИТЬ</button>
+            <button class="btn btn-danger" onclick="clearGame()">✕ СБРОСИТЬ</button>
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="panel">
+        <div class="panel-title">// ЛОГ ЗАПРОСОВ</div>
+        <div class="panel-body">
+          <div id="log" class="log">
+            <div class="log-entry dim">// Ожидание действий...</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="clearLog()">ОЧИСТИТЬ ЛОГ</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script src="/assets/js/app.js"></script>
+</body>
+</html>
+
+--------------------------------------------------
+ФАЙЛ: ./web/static/js/app.js
+--------------------------------------------------
+
+const state = {
+  login:     null,   
+  password:  null,   
+  userId:    null,   
+  gameId:    null,   
+  game:      null,   
+  mySymbol:  null,   
+  pollTimer: null,   
+  lastState: null,   
+  lastBoard: null,  
+};
+
+const API = window.location.origin;
+const POLL_INTERVAL = 2000; 
+
+
+
+
+
+function authHeader() {
+  if (!state.login) return {};
+  return { 'Authorization': 'Basic ' + btoa(state.login + ':' + state.password) };
+}
+
+
+async function api(method, path, body = null, silent = false) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+  };
+  if (body) opts.body = JSON.stringify(body);
+
+  if (!silent) log('→ ' + method + ' ' + path, 'dim');
+
+  try {
+    const resp = await fetch(API + path, opts);
+    const data = await resp.json().catch(() => ({}));
+    if (!silent) log('← ' + resp.status + ' ' + JSON.stringify(data).slice(0, 120), resp.ok ? 'ok' : 'err');
+    return { ok: resp.ok, status: resp.status, data };
+  } catch (e) {
+    if (!silent) log('✕ ОШИБКА: ' + e.message, 'err');
+    return { ok: false, data: {} };
+  }
+}
+
+
+
+function startPolling() {
+  stopPolling();
+  document.getElementById('poll-indicator').classList.remove('hidden');
+  state.pollTimer = setInterval(pollGame, POLL_INTERVAL);
+}
+
+function stopPolling() {
+  if (state.pollTimer) {
+    clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
+  document.getElementById('poll-indicator').classList.add('hidden');
+}
+
+async function pollGame() {
+  if (!state.gameId || !state.login) return;
+
+
+  const dot = document.getElementById('poll-dot');
+  dot.classList.add('active');
+  setTimeout(() => dot.classList.remove('active'), 300);
+
+
+  const r = await api('GET', '/games/' + state.gameId, null, true);
+  if (!r.ok) return;
+
+  const g        = r.data;
+  const boardStr = JSON.stringify(g.board.matrix);
+
+
+  if (g.state !== state.lastState || boardStr !== state.lastBoard) {
+    state.game      = g;
+    state.lastBoard = boardStr;
+    renderGame();
+
+
+    if (g.state !== state.lastState) {
+      if (state.lastState === 'waiting' && g.state === 'turn') {
+        log('✓ Второй игрок присоединился! Игра началась.', 'ok');
+      } else if (g.state === 'turn' && g.current_turn === state.userId) {
+        log('▶ Твой ход!', 'ok');
+      } else if (g.state === 'turn' && g.current_turn !== state.userId) {
+        log('⏳ Ход соперника...', 'info');
+      } else if (g.state === 'win') {
+        const iWon = g.current_turn === state.userId;
+        log(iWon ? '🏆 Ты победил!' : '✕ Ты проиграл', iWon ? 'ok' : 'err');
+        stopPolling();
+        return;
+      } else if (g.state === 'draw') {
+        log('≈ Ничья!', 'info');
+        stopPolling();
+        return;
+      }
+    }
+
+    state.lastState = g.state;
+  }
+}
+
+
+
+
+async function doLogin() {
+  const login    = document.getElementById('login-input').value.trim();
+  const password = document.getElementById('password-input').value;
+  if (!login || !password) return log('✕ Введи логин и пароль', 'err');
+
+  state.login    = login;
+  state.password = password;
+
+  const r = await api('POST', '/auth/login');
+
+  if (r.ok) {
+    state.userId = r.data.user_id;
+    document.getElementById('auth-status').className   = 'auth-status logged-in';
+    document.getElementById('auth-status').textContent = '● ВОШЁЛ: ' + login;
+    document.getElementById('user-uuid-box').classList.remove('hidden');
+    document.getElementById('user-uuid-val').textContent = state.userId;
+    log('✓ Авторизован как ' + login, 'ok');
+  } else {
+    state.login = state.password = null;
+    log('✕ Неверный логин или пароль', 'err');
+  }
+}
+
+function doLogout() {
+  stopPolling();
+  state.login = state.password = state.userId = null;
+  document.getElementById('auth-status').className   = 'auth-status logged-out';
+  document.getElementById('auth-status').textContent = '○ НЕ АВТОРИЗОВАН';
+  document.getElementById('user-uuid-box').classList.add('hidden');
+  log('✓ Вышел из аккаунта', 'info');
+}
+
+async function doRegister() {
+  const login    = document.getElementById('reg-login').value.trim();
+  const password = document.getElementById('reg-password').value;
+  if (!login || !password) return log('✕ Введи логин и пароль', 'err');
+
+  const r = await api('POST', '/auth/register', { login, password });
+  if (r.ok) {
+    log('✓ Пользователь ' + login + ' зарегистрирован', 'ok');
+  } else {
+    log('✕ ' + (r.data.error || 'Ошибка регистрации'), 'err');
+  }
+}
+
+
+
+async function createGame() {
+  if (!state.login) return log('✕ Войди в аккаунт', 'err');
+
+  const opponent_type = document.getElementById('opponent-type').value;
+  const r = await api('POST', '/games', { opponent_type });
+
+  if (r.ok) {
+    state.gameId    = r.data.id;
+    state.game      = r.data;
+    state.lastState = r.data.state;
+    state.lastBoard = JSON.stringify(r.data.board.matrix);
+    state.mySymbol  = 1; 
+
+    renderGame();
+    startPolling();
+    log('✓ Игра создана — ты играешь за X', 'ok');
+
+    if (opponent_type === 'user') {
+      log('⏳ Ожидаем второго игрока...', 'info');
+    }
+  }
+}
+
+async function joinGame(gameId) {
+  if (!state.login) return log('✕ Войди в аккаунт', 'err');
+
+  const r = await api('POST', '/games/' + gameId + '/join');
+
+  if (r.ok) {
+    state.gameId    = gameId;
+    state.game      = r.data;
+    state.lastState = r.data.state;
+    state.lastBoard = JSON.stringify(r.data.board.matrix);
+    state.mySymbol  = 2; 
+
+    renderGame();
+    startPolling();
+    log('✓ Присоединился к игре — ты играешь за O', 'ok');
+  }
+}
+
+async function makeMove() {
+  if (!state.gameId) return log('✕ Нет активной игры', 'err');
+
+  const row = parseInt(document.getElementById('move-row').value);
+  const col = parseInt(document.getElementById('move-col').value);
+  const r   = await api('PATCH', '/games/' + state.gameId, { row, col });
+
+  if (r.ok) {
+    state.game      = r.data;
+    state.lastState = r.data.state;
+    state.lastBoard = JSON.stringify(r.data.board.matrix);
+    renderGame();
+  }
+}
+
+async function makeCellMove(row, col) {
+  document.getElementById('move-row').value = row;
+  document.getElementById('move-col').value = col;
+  await makeMove();
+}
+
+async function refreshGame() {
+  if (!state.gameId) return log('✕ Нет активной игры', 'err');
+  const r = await api('GET', '/games/' + state.gameId);
+  if (r.ok) { state.game = r.data; renderGame(); }
+}
+
+function clearGame() {
+  stopPolling();
+  state.gameId    = null;
+  state.game      = null;
+  state.mySymbol  = null;
+  state.lastState = null;
+  state.lastBoard = null;
+
+  document.getElementById('game-id-box').classList.add('hidden');
+  document.getElementById('my-symbol').classList.add('hidden');
+
+  renderGame();
+  log('✓ Игра сброшена', 'info');
+}
+
+async function loadGames() {
+  if (!state.login) return log('✕ Войди в аккаунт', 'err');
+
+  const r    = await api('GET', '/games');
+  const list = document.getElementById('games-list');
+
+  if (!r.ok) return;
+
+  if (!r.data.length) {
+    list.innerHTML = '<div class="empty-msg">Нет доступных игр</div>';
+    return;
+  }
+
+  list.innerHTML = r.data.map(g => `
+    <div class="game-item">
+      <div>
+        <div class="game-id">${g.id}</div>
+        <span class="badge badge-waiting">WAITING</span>
+        <span class="badge badge-user">${g.opponent_type}</span>
+      </div>
+      <button class="btn btn-info btn-sm" onclick="joinGame('${g.id}')">JOIN</button>
+    </div>
+  `).join('');
+}
+
+async function getUser() {
+  const id = document.getElementById('search-uuid').value.trim();
+  if (!id) return log('✕ Введи UUID', 'err');
+
+  const r = await api('GET', '/users/' + id);
+
+  if (r.ok) {
+    document.getElementById('user-info').classList.remove('hidden');
+    document.getElementById('ui-id').textContent    = r.data.id;
+    document.getElementById('ui-login').textContent = r.data.login;
+  }
+}
+
+
+
+function renderGame() {
+  const board    = document.getElementById('board');
+  const statusEl = document.getElementById('game-status');
+  const idBox    = document.getElementById('game-id-box');
+  const symBox   = document.getElementById('my-symbol');
+
+  if (!state.game) {
+    board.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const cell     = document.createElement('div');
+      cell.className = 'cell blocked';
+      board.appendChild(cell);
+    }
+    statusEl.className   = 'game-status gs-idle';
+    statusEl.textContent = 'ИГРА НЕ НАЧАТА';
+    return;
+  }
+
+  const g        = state.game;
+  const matrix   = g.board.matrix;
+  const gameOver = g.state === 'win' || g.state === 'draw';
+  const isMyTurn = g.state === 'turn' && g.current_turn === state.userId;
+
+  idBox.classList.remove('hidden');
+  document.getElementById('game-uuid-val').textContent = g.id;
+
+  if (state.mySymbol) {
+    symBox.classList.remove('hidden');
+    symBox.className   = 'my-symbol-box ' + (state.mySymbol === 1 ? 'x' : 'o');
+    symBox.textContent = 'ТЫ ИГРАЕШЬ ЗА: ' + (state.mySymbol === 1 ? 'X ✕' : 'O ○');
+  }
+
+  statusEl.className = 'game-status ';
+  if (g.state === 'waiting') {
+    statusEl.className  += 'gs-waiting';
+    statusEl.textContent = '⏳ ОЖИДАНИЕ ВТОРОГО ИГРОКА...';
+  } else if (g.state === 'turn' && isMyTurn) {
+    statusEl.className  += 'gs-turn';
+    statusEl.textContent = '▶ ТВОЙ ХОД ' + (state.mySymbol === 1 ? '(X)' : '(O)');
+  } else if (g.state === 'turn' && !isMyTurn) {
+    statusEl.className  += 'gs-enemy';
+    statusEl.textContent = '⏳ ХОД СОПЕРНИКА...';
+  } else if (g.state === 'win') {
+    const iWon          = g.current_turn === state.userId;
+    statusEl.className  += iWon ? 'gs-win' : 'gs-lose';
+    statusEl.textContent = iWon ? '🏆 ТЫ ПОБЕДИЛ!' : '✕ ТЫ ПРОИГРАЛ';
+  } else if (g.state === 'draw') {
+    statusEl.className  += 'gs-draw';
+    statusEl.textContent = '≈ НИЧЬЯ';
+  }
+
+  board.innerHTML = '';
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const val      = matrix[r][c];
+      const sym      = val === 1 ? 'X' : val === 2 ? 'O' : '';
+      const symClass = val === 1 ? ' x' : val === 2 ? ' o' : '';
+
+      const canClick = val === 0 && isMyTurn && !gameOver;
+
+      const cell       = document.createElement('div');
+      cell.className   = 'cell' + symClass + (canClick ? ' clickable' : ' blocked');
+      cell.textContent = sym;
+
+      if (canClick) {
+        cell.onclick = ((row, col) => () => makeCellMove(row, col))(r, c);
+      }
+
+      board.appendChild(cell);
+    }
+  }
+}
+
+
+function log(msg, type = 'info') {
+  const el  = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className   = 'log-entry ' + type;
+  div.textContent = msg;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight; 
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML =
+    '<div class="log-entry dim">// Лог очищен</div>';
+}
+
+
+function switchTab(btn, tabId) {
+  const panel = btn.closest('.panel');
+  panel.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  panel.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  panel.querySelector('#' + tabId).classList.add('active');
+}
+
+
+renderGame();
+log('// Приложение запущено. Войди в аккаунт.', 'info');
+log('// В режиме двух игроков поле обновляется автоматически каждые 2 сек.', 'dim');
+
